@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::{kv::{KVSnapshot, KeyValue}};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) enum Operaiton {
+pub(crate) enum Operation {
     Read,
     Write,
     Snap,
@@ -15,7 +15,7 @@ pub(crate) enum Operaiton {
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CMDMessage {
-    pub operation: Operaiton,
+    pub operation: Operation,
     pub kv: KeyValue,
 }
 
