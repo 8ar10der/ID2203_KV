@@ -2,6 +2,7 @@ mod models;
 mod server;
 mod utils;
 
-fn main() {
-    println!("Hello, world!");
+#[tokio::main]
+async fn main() {
+    server::main();
 }
