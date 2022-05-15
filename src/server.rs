@@ -23,8 +23,9 @@ use crate::models::node::Node;
 use crate::models::package::{Package, Types};
 
 mod configs;
-use crate::configs::client::*;
-use crate::configs::server::*;
+use crate::configs::client::CLIENT_ADDR;
+use crate::configs::server::DEBUG_OUTPUT;
+use crate::configs::server::START_PORT;
 
 #[tokio::main]
 async fn main() {
@@ -241,6 +242,7 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
         // pass message to CMD
         match cmd_rec.recv().await {
             Some(msg) => {
+                print_log(format!("Command: {} is received from network layer", msg));
                 let msg: CMDMessage = serde_json::from_str(&msg).unwrap();
                 match msg.operation {
                     Operation::Get => {
@@ -290,6 +292,8 @@ async fn send_to_client(str: &str) {
     if let Ok(mut tcp_stream) = TcpStream::connect(CLIENT_ADDR).await {
         let (_, mut write) = tcp_stream.split();
         write.write_all(str.as_bytes()).await.unwrap();
+        // print_log(format!("Replay: {} is send to network layer", &str));
+        println!("Replay: {} is send to network layer", &str);
     } else {
         print_log(format!("Network failure"));
     }

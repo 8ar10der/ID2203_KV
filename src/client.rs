@@ -11,7 +11,7 @@ mod configs;
 mod models;
 
 use crate::configs::client::*;
-use crate::configs::server::*;
+use crate::configs::server::START_PORT;
 use crate::models::kv::*;
 use crate::models::msg::*;
 use crate::models::package::*;
@@ -25,20 +25,22 @@ async fn main() {
 }
 
 async fn listen_thread() {
-    let tcp_listener = TcpListener::bind(CLIENT_ADDR).await.unwrap();
-
-    let (mut socket, _) = tcp_listener.accept().await.unwrap();
-    let (read, _) = socket.split();
-    let mut reader = BufReader::new(read);
-    let mut buffer = String::new();
-    loop {
-        let line = reader.read_line(&mut buffer).await.unwrap();
-        //EOF
-        if line == 0 {
-            break;
+    tokio::spawn(async move {
+        let tcp_listener = TcpListener::bind(CLIENT_ADDR).await.unwrap();
+        loop {
+            let (mut socket, _) = tcp_listener.accept().await.unwrap();
+            let (read, _) = socket.split();
+            let mut reader = BufReader::new(read);
+            let mut buffer = String::new();
+            loop {
+                let line = reader.read_line(&mut buffer).await.unwrap();
+                if line == 0 {
+                    break;
+                }
+                println!("Server: {}", &&buffer);
+            }
         }
-        println!("Server: {}", &&buffer);
-    }
+    });
 }
 
 async fn command_thread() {
@@ -80,6 +82,8 @@ async fn command_thread() {
                 msg: Msg::CMD(msg),
             };
 
+            print_log(format!("{:?}", &pkg));
+
             let bytes = serde_json::to_string(&pkg).unwrap();
 
             if let Ok(mut tcp_stream) = TcpStream::connect(addr).await {
@@ -90,8 +94,6 @@ async fn command_thread() {
             }
 
             thread::sleep(time::Duration::from_millis(10));
-
-            break;
         }
     }
 }
@@ -104,7 +106,7 @@ fn get() -> CMDMessage {
     CMDMessage {
         operation: Operation::Get,
         kv: KeyValue {
-            key: input.parse().ok().expect("Get Error"),
+            key: input.trim().to_string(),
             value: 0,
         },
     }
@@ -126,16 +128,19 @@ fn put() -> CMDMessage {
 }
 
 fn snap() -> CMDMessage {
-    println!("---------------------------");
-    println!("Please enter the key and value [eg. A 10]:");
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).expect("Snap Error");
-    let kv: Vec<&str> = input.trim().split(" ").collect();
     CMDMessage {
         operation: Operation::Snap,
         kv: KeyValue {
-            key: kv[0].to_string(),
-            value: kv[1].parse::<u64>().ok().expect("Error"),
+            key: String::from("_"),
+            value: 0,
         },
+    }
+}
+
+fn print_log(log: String) {
+    if DEBUG_OUTPUT {
+        println!(" ");
+        println!("{}", log);
+        println!(" ");
     }
 }
