@@ -23,11 +23,12 @@ use structopt::StructOpt;
 
 const CLIENT_ADDR: &str = "127.0.0.1:8000";
 
+const DEBUG_OUTPUT: bool = true;
+
 // use anyhow::Result;o
 
 // use crate::utils::runnable::Runnable;
 
-#[allow(unused_variables)]
 #[tokio::main]
 async fn main() {
     //get the args from terminal
@@ -52,8 +53,8 @@ async fn main() {
 
     let port = 8080 + node.pid;
     let addr = "127.0.0.1:".to_string() + &port.to_string();
-
     let addr: SocketAddr = addr.parse().unwrap();
+    print_log(format!("Node address is {}", addr));
     let tcp_listener = TcpListener::bind(addr).await.unwrap();
 
     //send different Package received from network to different handle thread
@@ -65,7 +66,7 @@ async fn main() {
     let ble_out_task = ble_out_thread(&mut ble_out);
     let sp_in_task = sp_in_thread(&mut sp_rec, &sp_in);
     let ble_in_task = ble_in_thread(&mut ble_rec, &ble_in);
-    let cmd_task = command_thread(&mut cmd_rec, omni_paxos);
+    let cmd_task = command_thread(&mut cmd_rec, &omni_paxos);
     let fw_task = forward_thread(&tcp_listener, &sp_sender, &ble_sender, &cmd_sender);
 
     tokio::join!(
@@ -76,6 +77,58 @@ async fn main() {
         cmd_task,
         fw_task
     );
+
+    // listen to the incoming network message and distribute them into different handle threads
+    // loop {
+    //     let (mut socket, addr) = tcp_listener.accept().await.unwrap();
+    //     let sp_sender = sp_sender.clone();
+    //     let ble_sender = ble_sender.clone();
+    //     let cmd_sender = cmd_sender.clone();
+
+    //     tokio::spawn(async move {
+    //         let (r, _) = socket.split();
+    //         let mut reader = BufReader::new(r);
+    //         let mut buf = String::new();
+    //         loop {
+    //             let bytes_read = reader.read_line(&mut buf).await.unwrap();
+    //             //EOF
+    //             if bytes_read == 0 {
+    //                 break;
+    //             }
+    //             print_log(format!("receive string: {}", buf));
+    //             let deserialized: Package = serde_json::from_str(&buf).unwrap();
+    //             print_log(format!("deserialized: {:?}", deserialized));
+    //             //send to corresponding thread
+    //             match deserialized.types {
+    //                 Types::SP => {
+    //                     //serialization
+    //                     let serialization = serde_json::to_string(&deserialized.msg).unwrap();
+    //                     sp_sender
+    //                         .send(serialization)
+    //                         .await
+    //                         .expect("Failed to pass message to SP thread");
+    //                 }
+    //                 Types::BLE => {
+    //                     //serialization
+    //                     let serialization = serde_json::to_string(&deserialized.msg).unwrap();
+    //                     ble_sender
+    //                         .send(serialization)
+    //                         .await
+    //                         .expect("Failed to pass message to BLE thread");
+    //                 }
+    //                 Types::CMD => {
+    //                     //serialization
+    //                     let serialization = serde_json::to_string(&deserialized.msg).unwrap();
+    //                     cmd_sender
+    //                         .send(serialization)
+    //                         .await
+    //                         .expect("Failed to pass message to CMD thread");
+    //                 }
+    //             }
+    //             buf.clear();
+    //         }
+    //     });
+    // }
 }
 
 async fn forward_thread(
@@ -90,13 +143,14 @@ async fn forward_thread(
     let mut buffer = String::new();
 
     loop {
+        print_log(format!("-----fw_thread-----"));
         let line = reader.read_line(&mut buffer).await.unwrap();
         if line == 0 {
             break;
         }
-        println!("receive string: {}", buffer);
+        print_log(format!("receive string: {}", buffer));
         let pkg: Package = serde_json::from_str(&buffer).unwrap();
-        // println!("deserialized: {:?}", pkg);
+        print_log(format!("deserialized: {:?}", pkg));
         //send to corresponding thread
         match pkg.types {
             Types::SP => {
@@ -130,11 +184,13 @@ async fn forward_thread(
 
 async fn sp_out_thread(sp_out: &mut mpsc::Receiver<Message<KeyValue, KVSnapshot>>) {
     loop {
+        print_log(format!("-----sp_out_thread-----"));
         match sp_out.recv().await {
             Some(msg) => {
-                // println!(" ");
-                // println!("SP message: {:?} is received from SequencePaxos", msg);
-                // println!(" ");
+                print_log(format!(
+                    "SP message: {:?} is received from SequencePaxos",
+                    msg
+                ));
                 let port = 8080 + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
@@ -161,12 +217,11 @@ async fn sp_in_thread(
     sp_in: &mpsc::Sender<Message<KeyValue, KVSnapshot>>,
 ) {
     loop {
+        print_log(format!("-----sp_in_thread-----"));
         match sp_rec.recv().await {
             Some(msg) => {
                 let sp_msg = serde_json::from_str(&msg).unwrap();
-                // println!(" ");
-                // println!("SP message: {:?} is received from Network", sp_msg);
-                // println!(" ");
+                print_log(format!("SP message: {:?} is received from Network", sp_msg));
                 sp_in
                     .send(sp_msg)
                     .await
@@ -179,14 +234,13 @@ async fn sp_in_thread(
 
 async fn ble_out_thread(ble_out: &mut mpsc::Receiver<BLEMessage>) {
     loop {
+        print_log(format!("-----ble_out_thread-----"));
         match ble_out.recv().await {
             Some(msg) => {
-                // println!(" ");
-                // println!(
-                //     "BLE message: {:?} is received from BallotLeaderElection",
-                //     msg
-                // );
-                // println!(" ");
+                print_log(format!(
+                    "BLE message: {:?} is received from BallotLeaderElection",
+                    msg
+                ));
                 let port = 8080 + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
@@ -210,11 +264,13 @@ async fn ble_out_thread(ble_out: &mut mpsc::Receiver<BLEMessage>) {
 
 async fn ble_in_thread(ble_rec: &mut Receiver<String>, ble_in: &mpsc::Sender<BLEMessage>) {
     loop {
+        print_log(format!("-----ble_in_thread-----"));
         match ble_rec.recv().await {
             Some(msg) => {
-                // println!(" ");
-                // println!("BLE message: {} is received from network layer", msg);
-                // println!(" ");
+                print_log(format!(
+                    "BLE message: {} is received from network layer",
+                    msg
+                ));
                 let sp_msg = serde_json::from_str(&msg).unwrap();
                 ble_in
                     .send(sp_msg)
@@ -226,8 +282,9 @@ async fn ble_in_thread(ble_rec: &mut Receiver<String>, ble_in: &mpsc::Sender<BLE
     }
 }
 
-async fn command_thread(cmd_rec: &mut Receiver<String>, op: OmniPaxosNode<KeyValue, KVSnapshot>) {
+async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyValue, KVSnapshot>) {
     loop {
+        print_log(format!("-----cmd_thread-----"));
         // pass message to CMD
         match cmd_rec.recv().await {
             Some(msg) => {
@@ -281,7 +338,7 @@ async fn send_to_client(str: &str) {
         let (_, mut write) = tcp_stream.split();
         write.write_all(str.as_bytes()).await.unwrap();
     } else {
-        println!("Network failure");
+        print_log(format!("Network failure"));
     }
 }
 
@@ -315,4 +372,12 @@ async fn fetch_value(key: &str, vec: Vec<ReadEntry<KeyValue, KVSnapshot>>) -> Op
         index -= 1;
     }
     value
+}
+
+fn print_log(log: String) {
+    if DEBUG_OUTPUT {
+        println!(" ");
+        println!("{}", log);
+        println!(" ");
+    }
 }

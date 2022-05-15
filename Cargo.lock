@@ -642,10 +642,11 @@ dependencies = [
 [[package]]
 name = "omnipaxos_core"
 version = "0.1.0"
-source = "git+https://github.com/8ar10der/omnipaxos#3e125fdb4bccd023b88b8ef6c1ad475f107f8876"
+source = "git+https://github.com/PeteCui/omnipaxos#42662829fcf2d4568987b59b8491fc0a844b1dad"
 dependencies = [
  "hocon",
  "serde",
+ "serde_json",
  "slog",
  "slog-async",
  "slog-term",
@@ -654,7 +655,7 @@ dependencies = [
 [[package]]
 name = "omnipaxos_runtime"
 version = "0.1.0"
-source = "git+https://github.com/8ar10der/omnipaxos#3e125fdb4bccd023b88b8ef6c1ad475f107f8876"
+source = "git+https://github.com/PeteCui/omnipaxos#42662829fcf2d4568987b59b8491fc0a844b1dad"
 dependencies = [
  "omnipaxos_core",
  "tokio",
