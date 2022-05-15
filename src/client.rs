@@ -18,12 +18,15 @@ use crate::models::package::*;
 
 #[tokio::main]
 async fn main() {
+    //create client tasks
     let listener_task = listen_thread();
     let commander_task = command_thread();
 
+    //execute all tasks in parallel.
     tokio::join!(listener_task, commander_task);
 }
 
+// the listener thread, receive message from server and print it
 async fn listen_thread() {
     tokio::spawn(async move {
         let tcp_listener = TcpListener::bind(CLIENT_ADDR).await.unwrap();
@@ -43,21 +46,25 @@ async fn listen_thread() {
     });
 }
 
+// the interaction thread, get user's command and send it to the node
 async fn command_thread() {
     loop {
+        //choose the node
         println!("---------------------------");
         println!("Enter the pid of the node [eg. 2]:");
-
         let mut input = String::new();
         std::io::stdin()
             .read_line(&mut input)
             .expect("Stdin Read Error!");
+
+        //create node's address
         let p: u64 = input.trim().parse().ok().expect("Parse Error");
         let mut addr = "127.0.0.1:".to_string();
         let port = START_PORT + p;
         addr += &port.to_string();
         let addr: SocketAddr = addr.parse().unwrap();
 
+        //choose function
         loop {
             println!("---------------------------");
             println!("Please choose your command [input number 1/2/3]:");
@@ -67,6 +74,9 @@ async fn command_thread() {
 
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).expect("msg");
+
+            //use match to run the sub function and get the
+            //returned command message should be send
             let msg: CMDMessage = match input.trim() {
                 "1" => get(),
                 "2" => put(),
@@ -77,6 +87,7 @@ async fn command_thread() {
                 }
             };
 
+            //package message
             let pkg = Package {
                 types: Types::CMD,
                 msg: Msg::CMD(msg),
@@ -84,8 +95,10 @@ async fn command_thread() {
 
             print_log(format!("{:?}", &pkg));
 
+            //serialize to json string
             let bytes = serde_json::to_string(&pkg).unwrap();
 
+            //create TCP stream
             if let Ok(mut tcp_stream) = TcpStream::connect(addr).await {
                 let (_, mut write) = tcp_stream.split();
                 write.write_all(bytes.as_bytes()).await.unwrap();
@@ -93,11 +106,13 @@ async fn command_thread() {
                 print!("Connection Error");
             }
 
+            //wait reply from server
             thread::sleep(time::Duration::from_millis(10));
         }
     }
 }
 
+//get function
 fn get() -> CMDMessage {
     println!("---------------------------");
     println!("Please enter the key [eg. A]:");
@@ -112,6 +127,7 @@ fn get() -> CMDMessage {
     }
 }
 
+//put function
 fn put() -> CMDMessage {
     println!("---------------------------");
     println!("Please enter the key and value [eg. A 10]:");
@@ -127,6 +143,7 @@ fn put() -> CMDMessage {
     }
 }
 
+//snap funcation
 fn snap() -> CMDMessage {
     CMDMessage {
         operation: Operation::Snap,
@@ -137,6 +154,7 @@ fn snap() -> CMDMessage {
     }
 }
 
+//log printer
 fn print_log(log: String) {
     if DEBUG_OUTPUT {
         println!(" ");

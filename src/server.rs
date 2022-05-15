@@ -32,33 +32,39 @@ async fn main() {
     //get the args from terminal
     let node = Node::from_args();
 
+    //create the node by args
     let mut node_conf = NodeConfig::default();
     node_conf.set_pid(node.pid);
     node_conf.set_peers(node.peers);
 
+    //create a memory storage
     let storage = MemoryStorage::<KeyValue, KVSnapshot>::default();
 
+    //create the omni paxos handler
     let OmniPaxosHandle {
         omni_paxos,
         seq_paxos_handle,
         ble_handle,
     } = OmniPaxosNode::new(node_conf, storage);
 
+    //get the incoming and outgoing channel of BLE and SP
     let sp_in: mpsc::Sender<Message<KeyValue, KVSnapshot>> = seq_paxos_handle.incoming;
     let mut sp_out: mpsc::Receiver<Message<KeyValue, KVSnapshot>> = seq_paxos_handle.outgoing;
     let ble_in: mpsc::Sender<BLEMessage> = ble_handle.incoming;
     let mut ble_out: mpsc::Receiver<BLEMessage> = ble_handle.outgoing;
 
+    //init the node address to string
     let port = START_PORT + node.pid;
     let addr = "127.0.0.1:".to_string() + &port.to_string();
     let addr: SocketAddr = addr.parse().unwrap();
     print_log(format!("Node address is {}", addr));
 
-    //send different Package received from network to different handle thread
+    //create three message channel for the communication between the treads later
     let (sp_sender, mut sp_rec) = mpsc::channel::<String>(24);
     let (ble_sender, mut ble_rec) = mpsc::channel::<String>(24);
     let (cmd_sender, mut cmd_rec) = mpsc::channel::<String>(24);
 
+    //create the tasks
     let sp_out_task = sp_out_thread(&mut sp_out);
     let ble_out_task = ble_out_thread(&mut ble_out);
     let sp_in_task = sp_in_thread(&mut sp_rec, &sp_in);
@@ -66,6 +72,7 @@ async fn main() {
     let cmd_task = command_thread(&mut cmd_rec, &omni_paxos);
     let fw_task = forward_thread(&addr, &sp_sender, &ble_sender, &cmd_sender);
 
+    //execute all tasks in parallel.
     tokio::join!(
         sp_out_task,
         ble_out_task,
@@ -76,6 +83,7 @@ async fn main() {
     );
 }
 
+//The thread about the message forward
 async fn forward_thread(
     addr: &SocketAddr,
     sp_sender: &Sender<String>,
@@ -111,7 +119,7 @@ async fn forward_thread(
                         sp_sender
                             .send(msg)
                             .await
-                            .expect("Failed to pass message to SP thread");
+                            .expect("Failed to send message to SP thread");
                     }
                     Types::BLE => {
                         //serialization
@@ -119,7 +127,7 @@ async fn forward_thread(
                         ble_sender
                             .send(msg)
                             .await
-                            .expect("Failed to pass message to BLE thread");
+                            .expect("Failed to send message to BLE thread");
                     }
                     Types::CMD => {
                         //serialization
@@ -127,7 +135,7 @@ async fn forward_thread(
                         cmd_sender
                             .send(msg)
                             .await
-                            .expect("Failed to pass message to CMD thread");
+                            .expect("Failed to send message to CMD thread");
                     }
                 }
                 buffer.clear();
@@ -136,15 +144,13 @@ async fn forward_thread(
     }
 }
 
+//SP messages outgoing thread
 async fn sp_out_thread(sp_out: &mut mpsc::Receiver<Message<KeyValue, KVSnapshot>>) {
     loop {
         print_log(format!("-----sp_out_thread-----"));
         match sp_out.recv().await {
             Some(msg) => {
-                print_log(format!(
-                    "SP message: {:?} is received from SequencePaxos",
-                    msg
-                ));
+                print_log(format!("SP message: {:?} is received from channel", msg));
                 let port = START_PORT + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
@@ -166,6 +172,7 @@ async fn sp_out_thread(sp_out: &mut mpsc::Receiver<Message<KeyValue, KVSnapshot>
     }
 }
 
+//SP messages incoming thread
 async fn sp_in_thread(
     sp_rec: &mut Receiver<String>,
     sp_in: &mpsc::Sender<Message<KeyValue, KVSnapshot>>,
@@ -175,7 +182,7 @@ async fn sp_in_thread(
         match sp_rec.recv().await {
             Some(msg) => {
                 let sp_msg = serde_json::from_str(&msg).unwrap();
-                print_log(format!("SP message: {:?} is received from Network", sp_msg));
+                print_log(format!("SP message: {:?} is received from channel", sp_msg));
                 sp_in
                     .send(sp_msg)
                     .await
@@ -186,15 +193,13 @@ async fn sp_in_thread(
     }
 }
 
+//BLE messages outgoing thread
 async fn ble_out_thread(ble_out: &mut mpsc::Receiver<BLEMessage>) {
     loop {
         print_log(format!("-----ble_out_thread-----"));
         match ble_out.recv().await {
             Some(msg) => {
-                print_log(format!(
-                    "BLE message: {:?} is received from BallotLeaderElection",
-                    msg
-                ));
+                print_log(format!("BLE message: {:?} is received from channel", msg));
                 let port = START_PORT + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
@@ -216,30 +221,28 @@ async fn ble_out_thread(ble_out: &mut mpsc::Receiver<BLEMessage>) {
     }
 }
 
+//BLE messages incoming thread
 async fn ble_in_thread(ble_rec: &mut Receiver<String>, ble_in: &mpsc::Sender<BLEMessage>) {
     loop {
         print_log(format!("-----ble_in_thread-----"));
         match ble_rec.recv().await {
             Some(msg) => {
-                print_log(format!(
-                    "BLE message: {} is received from network layer",
-                    msg
-                ));
+                print_log(format!("BLE message: {} is received from channel", msg));
                 let sp_msg = serde_json::from_str(&msg).unwrap();
                 ble_in
                     .send(sp_msg)
                     .await
-                    .expect("Failed to send message to BLE")
+                    .expect("Failed to send message to channel")
             }
             None => {}
         }
     }
 }
 
+//commands messages incoming thread
 async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyValue, KVSnapshot>) {
     loop {
         print_log(format!("-----cmd_thread-----"));
-        // pass message to CMD
         match cmd_rec.recv().await {
             Some(msg) => {
                 print_log(format!("Command: {} is received from network layer", msg));
@@ -254,11 +257,11 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
                                 prefix += &value;
                                 send_to_client(&prefix).await;
                             } else {
-                                send_to_client("The value is none").await;
+                                send_to_client("No value about the key").await;
                             }
                         } else {
                             //println!("This key does not exist");
-                            send_to_client("The value is none").await;
+                            send_to_client("No value about the key").await;
                         }
                     }
 
@@ -287,7 +290,7 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
     }
 }
 
-//feedback to the client
+//to send message to client
 async fn send_to_client(str: &str) {
     if let Ok(mut tcp_stream) = TcpStream::connect(CLIENT_ADDR).await {
         let (_, mut write) = tcp_stream.split();
@@ -331,6 +334,7 @@ async fn fetch_value(key: &str, vec: Vec<ReadEntry<KeyValue, KVSnapshot>>) -> Op
     value
 }
 
+//print logs into the terminal
 fn print_log(log: String) {
     if DEBUG_OUTPUT {
         println!(" ");
