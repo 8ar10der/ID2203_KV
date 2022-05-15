@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::spawn;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use omnipaxos_core::{
