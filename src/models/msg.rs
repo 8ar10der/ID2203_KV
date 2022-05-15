@@ -1,14 +1,12 @@
-use omnipaxos_core::{
-    ballot_leader_election::messages::BLEMessage, messages::Message,
-};
+use omnipaxos_core::{ballot_leader_election::messages::BLEMessage, messages::Message};
 use serde::{Deserialize, Serialize};
 
-use super::{kv::{KVSnapshot, KeyValue}};
+use super::kv::{KVSnapshot, KeyValue};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum Operation {
-    Read,
-    Write,
+    Get,
+    Put,
     Snap,
 }
 

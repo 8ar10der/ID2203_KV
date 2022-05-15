@@ -14,20 +14,17 @@ use omnipaxos_runtime::omnipaxos::{
     ReadEntry::Snapshotted,
 };
 
+use structopt::StructOpt;
+
 mod models;
 use crate::models::kv::{KVSnapshot, KeyValue};
 use crate::models::msg::{CMDMessage, Msg, Operation};
 use crate::models::node::Node;
 use crate::models::package::{Package, Types};
-use structopt::StructOpt;
 
-const CLIENT_ADDR: &str = "127.0.0.1:8000";
-
-const DEBUG_OUTPUT: bool = true;
-
-// use anyhow::Result;o
-
-// use crate::utils::runnable::Runnable;
+mod configs;
+use crate::configs::client::*;
+use crate::configs::server::*;
 
 #[tokio::main]
 async fn main() {
@@ -51,7 +48,7 @@ async fn main() {
     let ble_in: mpsc::Sender<BLEMessage> = ble_handle.incoming;
     let mut ble_out: mpsc::Receiver<BLEMessage> = ble_handle.outgoing;
 
-    let port = 8080 + node.pid;
+    let port = START_PORT + node.pid;
     let addr = "127.0.0.1:".to_string() + &port.to_string();
     let addr: SocketAddr = addr.parse().unwrap();
     print_log(format!("Node address is {}", addr));
@@ -147,7 +144,7 @@ async fn sp_out_thread(sp_out: &mut mpsc::Receiver<Message<KeyValue, KVSnapshot>
                     "SP message: {:?} is received from SequencePaxos",
                     msg
                 ));
-                let port = 8080 + msg.to;
+                let port = START_PORT + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
 
@@ -197,7 +194,7 @@ async fn ble_out_thread(ble_out: &mut mpsc::Receiver<BLEMessage>) {
                     "BLE message: {:?} is received from BallotLeaderElection",
                     msg
                 ));
-                let port = 8080 + msg.to;
+                let port = START_PORT + msg.to;
                 let addr = "127.0.0.1:".to_string() + &port.to_string();
                 let addr: SocketAddr = addr.parse().unwrap();
 
@@ -246,7 +243,7 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
             Some(msg) => {
                 let msg: CMDMessage = serde_json::from_str(&msg).unwrap();
                 match msg.operation {
-                    Operation::Read => {
+                    Operation::Get => {
                         let key = msg.kv.key;
                         if let Some(entries) = op.read_entries(0..).await {
                             if let Some(v) = fetch_value(&key, entries.to_vec()).await {
@@ -263,7 +260,7 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
                         }
                     }
 
-                    Operation::Write => {
+                    Operation::Put => {
                         //get the key value
                         let write_entry = msg.kv;
                         //append
