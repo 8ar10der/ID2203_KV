@@ -252,7 +252,7 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
                         let key = msg.kv.key;
                         if let Some(entries) = op.read_entries(0..).await {
                             if let Some(v) = fetch_value(&key, entries.to_vec()).await {
-                                let mut prefix = "This value is :".to_string();
+                                let mut prefix = "This value is : ".to_string();
                                 let value = v.to_string();
                                 prefix += &value;
                                 send_to_client(&prefix).await;
@@ -270,15 +270,15 @@ async fn command_thread(cmd_rec: &mut Receiver<String>, op: &OmniPaxosNode<KeyVa
                         let write_entry = msg.kv;
                         //append
                         if let Ok(_) = op.append(write_entry).await {
-                            send_to_client("Successfully to append log").await;
+                            send_to_client("Successfully to put value").await;
                         } else {
-                            send_to_client("Failed to append log").await;
+                            send_to_client("Failed to put").await;
                         }
                     }
                     Operation::Snap => {
                         //something will cause omni paxos wrong
                         if let Ok(_) = op.snapshot(None, false).await {
-                            send_to_client("Successfully to snapshot").await;
+                            send_to_client("Successfully to make a snapshot").await;
                         } else {
                             send_to_client("Failed to snapshot").await;
                         }

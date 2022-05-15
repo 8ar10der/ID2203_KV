@@ -143,7 +143,7 @@ fn put() -> CMDMessage {
     }
 }
 
-//snap funcation
+//snap function
 fn snap() -> CMDMessage {
     CMDMessage {
         operation: Operation::Snap,
